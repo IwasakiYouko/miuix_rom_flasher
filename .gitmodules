@@ -1,0 +1,3 @@
+[submodule "miuix-mingw-ref"]
+	path = miuix-mingw-ref
+	url = https://github.com/YuKongA/miuix-mingw

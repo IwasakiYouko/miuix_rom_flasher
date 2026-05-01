@@ -1,0 +1,109 @@
+#!/sbin/sh
+if [ -a /dev/block/mapper/system ];then lptools unmap system; lptools map system; fi
+if [ -a /dev/block/mapper/system_ext ];then lptools unmap system_ext; lptools map system_ext; fi
+if [ -a /dev/block/mapper/vendor ];then lptools unmap vendor; lptools map vendor; fi
+if [ -a /dev/block/mapper/vendor_dlkm ];then lptools unmap vendor_dlkm; lptools map vendor_dlkm; fi
+if [ -a /dev/block/mapper/product ];then lptools unmap product; lptools map product; fi
+if [ -a /dev/block/mapper/odm ];then lptools unmap odm; lptools map odm; fi
+if [ -a /dev/block/mapper/mi_ext ];then lptools unmap mi_ext; lptools map mi_ext; fi
+if [ -a /dev/block/mapper/odm_dlkm ];then lptools unmap odm_dlkm; lptools map odm_dlkm; fi
+if [ -a /dev/block/mapper/system_dlkm ];then lptools unmap system_dlkm; lptools map system_dlkm; fi
+
+
+if [ -a /dev/block/mapper/system_a ];then lptools unmap system_a; lptools map system_a; fi
+if [ -a /dev/block/mapper/system_ext_a ];then lptools unmap system_ext_a; lptools map system_ext_a; fi
+if [ -a /dev/block/mapper/vendor_a ];then lptools unmap vendor_a; lptools map vendor_a; fi
+if [ -a /dev/block/mapper/vendor_dlkm_a ];then lptools unmap vendor_dlkm_a; lptools map vendor_dlkm_a; fi
+if [ -a /dev/block/mapper/product_a ];then lptools unmap product_a; lptools map product_a; fi
+if [ -a /dev/block/mapper/odm_a ];then lptools unmap odm_a; lptools map odm_a; fi
+if [ -a /dev/block/mapper/mi_ext_a ];then lptools unmap mi_ext_a; lptools map mi_ext_a; fi
+if [ -a /dev/block/mapper/odm_dlkm_a ];then lptools unmap odm_dlkm_a; lptools map odm_dlkm_a; fi
+if [ -a /dev/block/mapper/system_dlkm_a ];then lptools unmap system_dlkm_a; lptools map system_dlkm_a; fi
+
+
+if [ -d /tmp/Magisk ];then rm -r /tmp/Magisk ; fi
+mkdir -p /tmp/Magisk
+unzip "$ZIP" Magisk.apk -d /tmp/Magisk
+ui_print "======================================================"
+keyListener() {
+    ui_print ""
+    ui_print "===按下 [音量+] 选择 〔是〕，按下 [音量-] 选择〔否〕"
+    ui_print ""
+    keyListener_2
+}
+
+keyListener_2() {
+    getevent -qlc 1 2>&1 | grep VOLUME | grep " DOWN" >/tmp/events
+    if $(grep -q "VOLUMEUP" /tmp/events); then
+        ui_print " - 正在执行中，请稍后......"
+        return 0
+    elif $(grep -q "VOLUMEDOWN" /tmp/events); then
+        ui_print " - 正在执行中，请稍后......"
+        return 1
+    else
+        keyListener_2
+    fi
+}
+
+if [ -f /tmp/Magisk/Magisk.apk ]; then
+	ui_print " "
+	ui_print "===是否需要安装 Magisk"
+	ui_print " "
+	if keyListener; then
+		ui_print " "
+		ui_print "===正在刷入 Magisk"
+		unzip "/tmp/Magisk/Magisk.apk" "META-INF/com/google/android/*" -d "/tmp/Magisk"
+		busybox sh "/tmp/Magisk/META-INF/com/google/android/update-binary" dummy 1 "/tmp/Magisk/Magisk.apk"
+		ui_print " "
+		ui_print "===已完成安装 Magisk(Root)"
+		ui_print "======================================================"
+		ui_print " "
+		ui_print "===是否关闭全部Magisk模块，防止模块不兼容该版本导致无法开机"
+		ui_print " "
+		if keyListener; then
+			for MODULES in $(ls -d /data/adb/modules/*); do
+				touch $MODULES/disable
+			done
+			ui_print " "
+			ui_print "===已完成关闭全部Magisk模块"
+			ui_print " "
+		else
+			ui_print " "
+			ui_print "===已取消关闭全部Magisk模块"
+			ui_print " "
+		fi
+	else
+		ui_print " "
+		ui_print "===已取消安装 Magisk(Root)"
+		ui_print " "
+	fi
+else
+	ui_print " "
+	ui_print "===无root卡刷包,跳过此步骤"
+	ui_print " "
+fi
+
+if [ -f /tmp/Hanfy/bin/KernelSU.zip ]; then
+	ui_print " "
+	ui_print "===是否需要安装 KernelSU"
+	ui_print " "
+	if keyListener; then
+		ui_print " "
+		ui_print "===正在刷入 KernelSU"
+		unzip "/tmp/Hanfy/bin/KernelSU.zip" "META-INF/com/google/android/*" -d "/tmp/Hanfy/bin/"
+		busybox sh "/tmp/Hanfy/bin/META-INF/com/google/android/update-binary" dummy 1 "/tmp/Hanfy/bin/KernelSU.zip"
+		ui_print " "
+		ui_print "===已完成安装 KernelSU(Root)"
+		ui_print " "
+	else
+		ui_print " "
+		ui_print "===已取消安装 KernelSU(Root)"
+		ui_print " "
+	fi
+else
+	ui_print " "
+	ui_print "===无 KernelSU 包,跳过此步骤"
+	ui_print " "
+fi
+
+busybox rm -rf /tmp/Magisk

@@ -1,0 +1,10 @@
+.gradle/
+.gradle-user/
+.kotlin/
+build/
+app/build/
+.claude/
+.codex-cache/
+FolkLite-ref/
+__7zz_*.txt
+tmp_*.apk
