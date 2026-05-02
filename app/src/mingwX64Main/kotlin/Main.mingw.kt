@@ -119,6 +119,10 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.TextStyles
 import top.yukonga.miuix.kmp.theme.defaultTextStyles
 
+private val disguiseRelockSupportedDevices = setOf(
+    "pudding", "pandora", "popsicle", "nezha", "myron",
+)
+
 enum class SampleThemeMode { System, Light, Dark, MonetSystem, MonetLight, MonetDark }
 enum class WorkPage { Flash, Devices, Settings }
 enum class NavigationLabelMode { IconOnly, IconAndLabel }
@@ -153,6 +157,7 @@ private fun buildPreviewPartitionProgress(
     rootDebugMode: Boolean,
     autoReboot: Boolean,
     firmwareImageInfo: FirmwareImageInfo,
+    disguiseRelock: Boolean = false,
 ): FlashPartitionProgress {
     val stages = buildList {
         val imagePartitions = firmwareImageInfo.partitionNames
@@ -171,6 +176,10 @@ private fun buildPreviewPartitionProgress(
             addAll(imagePartitions)
         } else {
             add("等待镜像")
+        }
+        if (disguiseRelock) {
+            if (none { it.equals("abl", ignoreCase = true) }) add("abl")
+            if (none { it.equals("efisp", ignoreCase = true) }) add("efisp")
         }
         if (flashMode == FlashMode.CleanData) add("userdata")
         if (rootDebugMode && rootMode == RootMode.KernelSuLkm) add("ROOT")
@@ -275,6 +284,7 @@ private fun SampleApp() {
         mutableStateOf(rootManagerOptionsFor(RootMode.HfTeamGki).firstOrNull()?.id ?: "default")
     }
     var autoReboot by remember { mutableStateOf(true) }
+    var disguiseRelock by remember { mutableStateOf(false) }
     var fastbootDevices by remember { mutableStateOf(emptyList<FastbootDevice>()) }
     var selectedDeviceIndex by remember { mutableIntStateOf(0) }
     var isScanningDevices by remember { mutableStateOf(false) }
@@ -294,6 +304,7 @@ private fun SampleApp() {
         rootDebugMode,
         autoReboot,
         firmwareImageInfo,
+        disguiseRelock,
     ) {
         buildPreviewPartitionProgress(
             flashMode = flashMode,
@@ -301,6 +312,7 @@ private fun SampleApp() {
             rootDebugMode = rootDebugMode,
             autoReboot = autoReboot,
             firmwareImageInfo = firmwareImageInfo,
+            disguiseRelock = disguiseRelock,
         )
     }
     val rootManagerOptions = remember(rootMode) { rootManagerOptionsFor(rootMode) }
@@ -502,6 +514,7 @@ private fun SampleApp() {
                             autoReboot = autoReboot,
                             verifyPackage = verifyPackage,
                             romPackageInfo = romPackageInfo,
+                            disguiseRelock = disguiseRelock,
                             appendLog = ::appendLogFromWorker,
                             onProgressUpdate = { progress ->
                                 uiScope.launch {
@@ -725,6 +738,8 @@ private fun SampleApp() {
                                   managerDownloadProgress = managerDownloadProgress,
                                   rootDebugMode = rootDebugMode,
                                   isFlashing = isFlashing,
+                                  disguiseRelock = disguiseRelock,
+                                  onDisguiseRelockChange = { disguiseRelock = it },
                             )
                             WorkPage.Devices -> DevicesPage(
                                 isWideLayout = isWideLayout,
@@ -836,6 +851,8 @@ private fun FlashPage(
     managerDownloadProgress: ManagerDownloadProgress,
     rootDebugMode: Boolean,
     isFlashing: Boolean,
+    disguiseRelock: Boolean,
+    onDisguiseRelockChange: (Boolean) -> Unit,
 ) {
     if (isWideLayout) {
         val contentScrollState = rememberScrollState()
@@ -896,6 +913,12 @@ private fun FlashPage(
                                 onSelectDeviceIndex = onSelectDeviceIndex,
                                 isScanningDevices = isScanningDevices,
                             )
+                            if (romPackageInfo.deviceName.lowercase() in disguiseRelockSupportedDevices) {
+                                DisguiseRelockPanel(
+                                    disguiseRelock = disguiseRelock,
+                                    onDisguiseRelockChange = onDisguiseRelockChange,
+                                )
+                            }
                         }
                         Column(
                             modifier = Modifier
@@ -979,6 +1002,12 @@ private fun FlashPage(
                     onSelectDeviceIndex = onSelectDeviceIndex,
                     isScanningDevices = isScanningDevices,
                 )
+                if (romPackageInfo.deviceName.lowercase() in disguiseRelockSupportedDevices) {
+                    DisguiseRelockPanel(
+                        disguiseRelock = disguiseRelock,
+                        onDisguiseRelockChange = onDisguiseRelockChange,
+                    )
+                }
                 DeviceAboutPanel(
                     romPackageInfo = romPackageInfo,
                     displayDeviceName = resolvedDeviceDisplayName,
@@ -2441,4 +2470,22 @@ private fun ThemeOption(
             if (selected) Text(text = "当前", color = MiuixTheme.colorScheme.primary)
         },
     )
+}
+
+@Composable
+private fun DisguiseRelockPanel(
+    disguiseRelock: Boolean,
+    onDisguiseRelockChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SmallTitle(text = "伪装回锁")
+        Card {
+            SwitchPreference(
+                title = "伪装回锁",
+                checked = disguiseRelock,
+                onCheckedChange = onDisguiseRelockChange,
+            )
+        }
+    }
 }

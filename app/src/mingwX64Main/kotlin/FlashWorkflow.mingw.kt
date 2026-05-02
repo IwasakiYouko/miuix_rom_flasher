@@ -50,6 +50,7 @@ fun executeFlashWorkflow(
     autoReboot: Boolean,
     verifyPackage: Boolean,
     romPackageInfo: RomPackageInfo,
+    disguiseRelock: Boolean,
     appendLog: (String) -> Unit,
     onProgressUpdate: (FlashPartitionProgress) -> Unit = {},
     onExtractionProgressUpdate: (ZstdExtractionProgress) -> Unit = {},
@@ -99,14 +100,50 @@ fun executeFlashWorkflow(
         return false
     }
 
-    val flashTargets = collectFlashImageTargets(
+    var flashTargets = collectFlashImageTargets(
         preparedImage = preparedImage,
         appendLog = appendLog,
         skipSuper = rootDebugMode && rootMode == RootMode.KernelSuLkm,
-    )
+    ).toMutableList()
     if (flashTargets.isEmpty()) {
         appendLog("未在 firmware-update 中找到可刷写镜像")
         return false
+    }
+
+    if (disguiseRelock) {
+        val disguiseImages = locateDisguiseRelockImages(appendLog)
+        if (disguiseImages != null) {
+            val ablIndex = flashTargets.indexOfFirst { it.partition.equals("abl", ignoreCase = true) }
+            if (ablIndex >= 0) {
+                flashTargets[ablIndex] = FlashImageTarget(
+                    partition = "abl",
+                    imagePath = disguiseImages.ablImagePath,
+                    displayName = fileNameOf(disguiseImages.ablImagePath),
+                    sourceDescription = "伪装回锁定制 abl",
+                )
+                appendLog("已替换 abl.img 为伪装回锁版本")
+            } else {
+                flashTargets += FlashImageTarget(
+                    partition = "abl",
+                    imagePath = disguiseImages.ablImagePath,
+                    displayName = fileNameOf(disguiseImages.ablImagePath),
+                    sourceDescription = "伪装回锁定制 abl",
+                )
+                appendLog("已追加伪装回锁 abl.img")
+            }
+            val hasEfisp = flashTargets.any { it.partition.equals("efisp", ignoreCase = true) }
+            if (!hasEfisp) {
+                flashTargets += FlashImageTarget(
+                    partition = "efisp",
+                    imagePath = disguiseImages.efispImagePath,
+                    displayName = fileNameOf(disguiseImages.efispImagePath),
+                    sourceDescription = "伪装回锁 efisp",
+                )
+                appendLog("已追加伪装回锁 efisp.img")
+            }
+        } else {
+            appendLog("伪装回锁镜像获取失败，跳过伪装回锁")
+        }
     }
 
     val stages = buildPartitionStages(
