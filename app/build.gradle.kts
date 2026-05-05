@@ -52,7 +52,7 @@ val magiskPatcherDir = rootProject.layout.projectDirectory.dir(".codex-cache/Mag
 val composeResourceDir = layout.buildDirectory.dir("generated/compose/resourceGenerator/preparedResources/commonMain/composeResources")
 val appIconPng = layout.projectDirectory.file("src/commonMain/composeResources/drawable/app_icon.png")
 val appIconIco = layout.projectDirectory.file("src/commonMain/composeResources/drawable/app_icon.ico")
-val embedExeIconScript = rootProject.layout.projectDirectory.file("tools/embed-exe-icon.ps1")
+val embedExeIconScript = rootProject.layout.projectDirectory.file("tools/embed-exe-icon.py")
 
 tasks.withType<KotlinNativeLink>().configureEach {
     doLast {
@@ -110,22 +110,16 @@ tasks.withType<KotlinNativeLink>().configureEach {
             }
         if (appIconIco.asFile.exists() && embedExeIconScript.asFile.exists()) {
             val process = ProcessBuilder(
-                "powershell",
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
+                "python",
                 embedExeIconScript.asFile.absolutePath,
-                "-ExePath",
                 outputFile.get().absolutePath,
-                "-IconPath",
                 appIconIco.asFile.absolutePath,
             )
                 .inheritIO()
                 .start()
             val exitCode = process.waitFor()
             if (exitCode != 0) {
-                error("Failed to embed executable icon, exit code: $exitCode")
+                logger.warn("Failed to embed executable icon (exit code: $exitCode), continuing build without icon embedding")
             }
         }
 

@@ -48,6 +48,7 @@ fun executeFlashWorkflow(
     rootManagerVersion: String?,
     rootDebugMode: Boolean,
     autoReboot: Boolean,
+    clearGoogleLock: Boolean,
     verifyPackage: Boolean,
     romPackageInfo: RomPackageInfo,
     disguiseRelock: Boolean,
@@ -110,27 +111,56 @@ fun executeFlashWorkflow(
         return false
     }
 
+    if (!disguiseRelock) {
+        val removed = flashTargets.removeAll { it.partition.equals("efisp", ignoreCase = true) }
+        if (removed) appendLog("未启用伪装回锁，已跳过 efisp 分区")
+    }
+
     if (disguiseRelock) {
+        val firmwareDir = resolveRuntimePath(".\\firmware-update")
+        val ablLoadElistPath = "$firmwareDir\\abl_loadelisp.img"
+        val hasAblLoadElist = fileExistsUnicodeSafe(ablLoadElistPath)
         val disguiseImages = locateDisguiseRelockImages(appendLog)
-        if (disguiseImages != null) {
+
+        if (hasAblLoadElist) {
             val ablIndex = flashTargets.indexOfFirst { it.partition.equals("abl", ignoreCase = true) }
+            val customTarget = FlashImageTarget(
+                partition = "abl",
+                imagePath = ablLoadElistPath,
+                displayName = "abl_loadelisp.img",
+                sourceDescription = "伪装回锁 abl (内置 abl_loadelisp)",
+            )
             if (ablIndex >= 0) {
-                flashTargets[ablIndex] = FlashImageTarget(
-                    partition = "abl",
-                    imagePath = disguiseImages.ablImagePath,
-                    displayName = fileNameOf(disguiseImages.ablImagePath),
-                    sourceDescription = "伪装回锁定制 abl",
-                )
-                appendLog("已替换 abl.img 为伪装回锁版本")
+                flashTargets[ablIndex] = customTarget
             } else {
-                flashTargets += FlashImageTarget(
-                    partition = "abl",
-                    imagePath = disguiseImages.ablImagePath,
-                    displayName = fileNameOf(disguiseImages.ablImagePath),
-                    sourceDescription = "伪装回锁定制 abl",
-                )
-                appendLog("已追加伪装回锁 abl.img")
+                flashTargets += customTarget
             }
+            appendLog("检测到 abl_loadelisp.img，已替换 abl 分区镜像")
+        } else if (disguiseImages != null) {
+            val ablIndex = flashTargets.indexOfFirst { it.partition.equals("abl", ignoreCase = true) }
+            val customTarget = FlashImageTarget(
+                partition = "abl",
+                imagePath = disguiseImages.ablImagePath,
+                displayName = fileNameOf(disguiseImages.ablImagePath),
+                sourceDescription = "伪装回锁定制 abl",
+            )
+            if (ablIndex >= 0) {
+                flashTargets[ablIndex] = customTarget
+            } else {
+                flashTargets += customTarget
+            }
+            appendLog("已替换 abl.img 为伪装回锁版本")
+        } else {
+            appendLog("========================================")
+            appendLog("伪装回锁所需镜像缺失，请将以下文件放入 firmware-update 文件夹：")
+            appendLog("  abl_loadelisp.img（abl 与 efisp 合并镜像）")
+            appendLog("  或分别放置 abl.img 和 efisp.img")
+            appendLog("放置完成后请重新执行刷机")
+            appendLog("========================================")
+            return false
+        }
+
+        if (disguiseImages != null) {
             val hasEfisp = flashTargets.any { it.partition.equals("efisp", ignoreCase = true) }
             if (!hasEfisp) {
                 flashTargets += FlashImageTarget(
@@ -142,7 +172,8 @@ fun executeFlashWorkflow(
                 appendLog("已追加伪装回锁 efisp.img")
             }
         } else {
-            appendLog("伪装回锁镜像获取失败，跳过伪装回锁")
+            appendLog("伪装回锁 efisp 镜像下载失败，中断刷机")
+            return false
         }
     }
 
@@ -152,6 +183,7 @@ fun executeFlashWorkflow(
         rootDebugMode = rootDebugMode,
         flashTargets = flashTargets,
         autoReboot = autoReboot,
+        clearGoogleLock = clearGoogleLock,
     )
     var completedCount = 0
 
@@ -230,6 +262,16 @@ fun executeFlashWorkflow(
         appendLog("再次设置活动槽位 a 失败，继续执行")
     }
 
+    if (clearGoogleLock) {
+        activateStage("frp")
+        appendLog("正在清除谷歌锁 frp")
+        if (!runFastboot(serial, listOf("erase", "frp"), appendLog)) {
+            appendLog("清除 frp 失败")
+            return false
+        }
+        completeStage("frp")
+    }
+
     if (autoReboot) {
         activateStage("reboot")
         appendLog("发送重启命令")
@@ -252,11 +294,13 @@ private fun buildPartitionStages(
     rootDebugMode: Boolean,
     flashTargets: List<FlashImageTarget>,
     autoReboot: Boolean,
+    clearGoogleLock: Boolean,
 ): List<String> {
     val stages = mutableListOf<String>()
     stages += flashTargets.map { it.partition }
     if (flashMode == FlashMode.CleanData) stages += "userdata"
     if (rootDebugMode && rootMode == RootMode.KernelSuLkm) stages += "ROOT"
+    if (clearGoogleLock) stages += "frp"
     if (autoReboot) stages += "reboot"
     return stages.distinct()
 }

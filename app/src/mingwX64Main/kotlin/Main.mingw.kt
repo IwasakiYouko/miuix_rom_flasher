@@ -13,6 +13,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -81,6 +82,7 @@ import kotlin.math.cos
 import kotlin.math.round
 import kotlin.math.sin
 import platform.posix.SEEK_END
+import platform.posix.remove
 import platform.posix.fclose
 import platform.posix.fopen
 import platform.posix.fread
@@ -151,11 +153,32 @@ val RootMode.title: String
         RootMode.KeepOriginal -> "保留系统原始状态"
     }
 
+private fun fetchAnnouncement(): String? {
+    val script = buildString {
+        appendLine("[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(\$false)")
+        appendLine("try {")
+        appendLine("    ${"$"}r = Invoke-WebRequest -Uri 'https://raw.giteeusercontent.com/hanfy-djc/miuix_rom_flasher/raw/master/pubknow.txt' -UseBasicParsing -TimeoutSec 10")
+        appendLine("    [Console]::Out.Write(${"$"}r.Content)")
+        appendLine("} catch {")
+        appendLine("    # silent")
+        appendLine("}")
+    }
+    val scriptPath = resolveTempPath(".\\__winflasher_announcement.ps1")
+    if (!writeUtf8BomFileUnicodeSafe(scriptPath, script)) return null
+    val lines = runStreamingShellCommand(
+        command = "powershell -NoProfile -ExecutionPolicy Bypass -File \"$scriptPath\"",
+    ).outputLines
+    runCatching { remove(scriptPath) }
+    val text = lines.joinToString("\n").trim()
+    return text.ifBlank { null }
+}
+
 private fun buildPreviewPartitionProgress(
     flashMode: FlashMode,
     rootMode: RootMode,
     rootDebugMode: Boolean,
     autoReboot: Boolean,
+    clearGoogleLock: Boolean,
     firmwareImageInfo: FirmwareImageInfo,
     disguiseRelock: Boolean = false,
 ): FlashPartitionProgress {
@@ -183,6 +206,7 @@ private fun buildPreviewPartitionProgress(
         }
         if (flashMode == FlashMode.CleanData) add("userdata")
         if (rootDebugMode && rootMode == RootMode.KernelSuLkm) add("ROOT")
+        if (clearGoogleLock) add("frp")
         if (autoReboot) add("reboot")
     }
 
@@ -284,7 +308,9 @@ private fun SampleApp() {
         mutableStateOf(rootManagerOptionsFor(RootMode.HfTeamGki).firstOrNull()?.id ?: "default")
     }
     var autoReboot by remember { mutableStateOf(true) }
+    var clearGoogleLock by remember { mutableStateOf(false) }
     var disguiseRelock by remember { mutableStateOf(false) }
+    var showDisguiseRelockConfirm by remember { mutableStateOf(false) }
     var fastbootDevices by remember { mutableStateOf(emptyList<FastbootDevice>()) }
     var selectedDeviceIndex by remember { mutableIntStateOf(0) }
     var isScanningDevices by remember { mutableStateOf(false) }
@@ -303,6 +329,7 @@ private fun SampleApp() {
         rootMode,
         rootDebugMode,
         autoReboot,
+        clearGoogleLock,
         firmwareImageInfo,
         disguiseRelock,
     ) {
@@ -311,6 +338,7 @@ private fun SampleApp() {
             rootMode = rootMode,
             rootDebugMode = rootDebugMode,
             autoReboot = autoReboot,
+            clearGoogleLock = clearGoogleLock,
             firmwareImageInfo = firmwareImageInfo,
             disguiseRelock = disguiseRelock,
         )
@@ -323,6 +351,8 @@ private fun SampleApp() {
         RootMode.HfTeamGki -> hfTeamGkiManagerVersion
         RootMode.KeepOriginal -> null
     }
+    var announcementText by remember { mutableStateOf<String?>(null) }
+    var showAnnouncement by remember { mutableStateOf(false) }
     val logLines = remember { mutableStateListOf<String>() }
     var logByteCount by remember { mutableIntStateOf(0) }
     var logSnapshotRevision by remember { mutableIntStateOf(0) }
@@ -361,6 +391,15 @@ private fun SampleApp() {
     fun exportLogs() {
         val path = exportLogLines(logLines)
         appendLog(if (path != null) "日志已导出 $path" else "日志导出失败")
+    }
+
+    fun requestDisguiseRelockChange(enabled: Boolean) {
+        if (enabled) {
+            if (!disguiseRelock) showDisguiseRelockConfirm = true
+        } else {
+            showDisguiseRelockConfirm = false
+            disguiseRelock = false
+        }
     }
 
     fun refreshDevices() {
@@ -512,6 +551,7 @@ private fun SampleApp() {
                             rootManagerVersion = rootManagerVersion,
                             rootDebugMode = rootDebugMode,
                             autoReboot = autoReboot,
+                            clearGoogleLock = clearGoogleLock,
                             verifyPackage = verifyPackage,
                             romPackageInfo = romPackageInfo,
                             disguiseRelock = disguiseRelock,
@@ -619,6 +659,11 @@ private fun SampleApp() {
             refreshDevices()
         }
         platformToolsProgressText = platformToolsState.statusText
+        val text = withContext(Dispatchers.Default) { fetchAnnouncement() }
+        if (!text.isNullOrBlank()) {
+            announcementText = text
+            showAnnouncement = true
+        }
     }
 
     LaunchedEffect(autoExportLogs, logSnapshotRevision) {
@@ -714,6 +759,8 @@ private fun SampleApp() {
                                   },
                                   autoReboot = autoReboot,
                                   onAutoRebootChange = { autoReboot = it },
+                                  clearGoogleLock = clearGoogleLock,
+                                  onClearGoogleLockChange = { clearGoogleLock = it },
                                 fastbootDevices = fastbootDevices,
                                 selectedDeviceIndex = selectedDeviceIndex,
                                 onSelectDeviceIndex = {
@@ -739,7 +786,7 @@ private fun SampleApp() {
                                   rootDebugMode = rootDebugMode,
                                   isFlashing = isFlashing,
                                   disguiseRelock = disguiseRelock,
-                                  onDisguiseRelockChange = { disguiseRelock = it },
+                                  onDisguiseRelockChange = ::requestDisguiseRelockChange,
                             )
                             WorkPage.Devices -> DevicesPage(
                                 isWideLayout = isWideLayout,
@@ -789,6 +836,118 @@ private fun SampleApp() {
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
                 )
+
+                if (showAnnouncement && announcementText != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.45f))
+                            .zIndex(20f)
+                            .clickable { showAnnouncement = false },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Card(
+                            modifier = Modifier
+                                .widthIn(max = 520.dp)
+                                .padding(32.dp)
+                                .clickable { /* consume click */ },
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                            ) {
+                                Text(
+                                    text = "公告",
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    text = announcementText!!,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                )
+                                TextButton(
+                                    text = "我知道了",
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = { showAnnouncement = false },
+                                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (showDisguiseRelockConfirm) {
+                    DisguiseRelockConfirmDialog(
+                        onCancel = { showDisguiseRelockConfirm = false },
+                        onConfirm = {
+                            disguiseRelock = true
+                            showDisguiseRelockConfirm = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DisguiseRelockConfirmDialog(
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.45f))
+            .zIndex(30f)
+            .clickable { onCancel() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Card(
+            modifier = Modifier
+                .widthIn(max = 560.dp)
+                .padding(32.dp)
+                .clickable { /* consume click */ },
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(
+                    text = "伪装回锁确认",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        "1. 伪装回锁为极客功能，不追随极致隐藏与谷歌三绿请不要开",
+                        "2. 无论所有 ROM，当刷入到假回锁开启状态的 ROM 时都需要手动进 REC 格式化一次 DATA",
+                        "3. 此选项极不稳定，在官方更新 rollback_index 后会导致加载旧版本 abl 无法开机",
+                        "4. 小白瞎选造成的不开机与 ROMer 无关",
+                        "5. 继续即代表同意本协议",
+                    ).forEach { line ->
+                        Text(
+                            text = line,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    TextButton(
+                        text = "取消",
+                        modifier = Modifier.weight(1f),
+                        onClick = onCancel,
+                    )
+                    TextButton(
+                        text = "继续",
+                        modifier = Modifier.weight(1f),
+                        onClick = onConfirm,
+                        colors = ButtonDefaults.textButtonColorsPrimary(),
+                    )
+                }
             }
         }
     }
@@ -836,6 +995,8 @@ private fun FlashPage(
     onRootManagerVersionChange: (String) -> Unit,
     autoReboot: Boolean,
     onAutoRebootChange: (Boolean) -> Unit,
+    clearGoogleLock: Boolean,
+    onClearGoogleLockChange: (Boolean) -> Unit,
     fastbootDevices: List<FastbootDevice>,
     selectedDeviceIndex: Int,
     onSelectDeviceIndex: (Int) -> Unit,
@@ -937,6 +1098,8 @@ private fun FlashPage(
                                 onRefreshDevices = onRefreshDevices,
                                 onStartFlash = onStartFlash,
                                 onClearLogs = onClearLogs,
+                                clearGoogleLock = clearGoogleLock,
+                                onClearGoogleLockChange = onClearGoogleLockChange,
                                 isFlashing = isFlashing,
                             )
                         }
@@ -1019,6 +1182,8 @@ private fun FlashPage(
                     onRefreshDevices = onRefreshDevices,
                     onStartFlash = onStartFlash,
                     onClearLogs = onClearLogs,
+                    clearGoogleLock = clearGoogleLock,
+                    onClearGoogleLockChange = onClearGoogleLockChange,
                     isFlashing = isFlashing,
                 )
                 FlashLogPanel(
@@ -1520,6 +1685,8 @@ private fun FlashActionPanel(
     onRefreshDevices: () -> Unit,
     onStartFlash: () -> Unit,
     onClearLogs: () -> Unit,
+    clearGoogleLock: Boolean,
+    onClearGoogleLockChange: (Boolean) -> Unit,
     isFlashing: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -1556,12 +1723,24 @@ private fun FlashActionPanel(
                         }
                     }
                 } else {
-                    TextButton(
-                        text = "开始刷机",
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        onClick = onStartFlash,
-                        colors = ButtonDefaults.textButtonColorsPrimary(),
-                    )
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CheckboxPreference(
+                            title = "是否清除谷歌锁",
+                            checked = clearGoogleLock,
+                            onCheckedChange = onClearGoogleLockChange,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(
+                            text = "开始刷机",
+                            modifier = Modifier.weight(1f),
+                            onClick = onStartFlash,
+                            colors = ButtonDefaults.textButtonColorsPrimary(),
+                        )
+                    }
                 }
             }
         }
@@ -1858,7 +2037,7 @@ private fun DeviceAboutPanel(
     }
     val metrics = listOf(
         "处理器" to romPackageInfo.deviceCpu,
-        "刷入工具版本" to "0.10.Pre",
+        "刷入工具版本" to "OS3.0.260504",
         "ramdisk" to ramdiskValue,
         "作者" to romPackageInfo.author,
     )
@@ -2193,6 +2372,14 @@ private fun SettingsPage(
                             onKeepWindowOnTopChange = onKeepWindowOnTopChange,
                             modifier = Modifier.fillMaxWidth(),
                         )
+                        PlatformToolsPanel(
+                            platformToolsState = platformToolsState,
+                            isUpdating = isUpdatingPlatformTools,
+                            progress = platformToolsProgress,
+                            progressText = platformToolsProgressText,
+                            onUpdate = onUpdatePlatformTools,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                     Column(
                         modifier = Modifier.widthIn(min = 280.dp, max = 320.dp),
@@ -2205,14 +2392,6 @@ private fun SettingsPage(
                             modifier = Modifier.fillMaxWidth(),
                         )
                         AcknowledgementsPanel(modifier = Modifier.fillMaxWidth())
-                        PlatformToolsPanel(
-                            platformToolsState = platformToolsState,
-                            isUpdating = isUpdatingPlatformTools,
-                            progress = platformToolsProgress,
-                            progressText = platformToolsProgressText,
-                            onUpdate = onUpdatePlatformTools,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
                     }
                 }
             } else {
@@ -2486,6 +2665,17 @@ private fun DisguiseRelockPanel(
                 checked = disguiseRelock,
                 onCheckedChange = onDisguiseRelockChange,
             )
+        }
+        if (disguiseRelock) {
+            Card {
+                Column(
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(text = "首次刷入伪装回锁后需要格式化 data 分区", color = MiuixTheme.colorScheme.onSurface)
+                    Text(text = "后续 OTA 升级无需再次格式化", color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                }
+            }
         }
     }
 }

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="GradleSettings">
+    <option name="linkedExternalProjectsSettings">
+      <GradleProjectSettings>
+        <compositeConfiguration>
+          <compositeBuild compositeDefinitionSource="SCRIPT">
+            <builds>
+              <build path="$PROJECT_DIR$/miuix-mingw-ref" name="miuix-mingw">
+                <projects>
+                  <project path="$PROJECT_DIR$/miuix-mingw-ref" />
+                  <project path="$PROJECT_DIR$/miuix-mingw-ref/example" />
+                  <project path="$PROJECT_DIR$/miuix-mingw-ref/example/mingw" />
+                  <project path="$PROJECT_DIR$/miuix-mingw-ref/example/shared" />
+                  <project path="$PROJECT_DIR$/miuix-mingw-ref/miuix-blur" />
+                  <project path="$PROJECT_DIR$/miuix-mingw-ref/miuix-core" />
+                  <project path="$PROJECT_DIR$/miuix-mingw-ref/miuix-icons" />
+                  <project path="$PROJECT_DIR$/miuix-mingw-ref/miuix-navigation3-ui" />
+                  <project path="$PROJECT_DIR$/miuix-mingw-ref/miuix-preference" />
+                  <project path="$PROJECT_DIR$/miuix-mingw-ref/miuix-shapes" />
+                  <project path="$PROJECT_DIR$/miuix-mingw-ref/miuix-ui" />
+                </projects>
+              </build>
+              <build path="$PROJECT_DIR$/miuix-mingw-ref/build-plugins" name="build-plugins">
+                <projects>
+                  <project path="$PROJECT_DIR$/miuix-mingw-ref/build-plugins" />
+                </projects>
+              </build>
+            </builds>
+          </compositeBuild>
+        </compositeConfiguration>
+        <option name="externalProjectPath" value="$PROJECT_DIR$" />
+        <option name="gradleJvm" value="#JAVA_HOME" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/app" />
+            <option value="$PROJECT_DIR$/miuix-mingw-ref" />
+            <option value="$PROJECT_DIR$/miuix-mingw-ref/build-plugins" />
+            <option value="$PROJECT_DIR$/miuix-mingw-ref/example" />
+            <option value="$PROJECT_DIR$/miuix-mingw-ref/example/mingw" />
+            <option value="$PROJECT_DIR$/miuix-mingw-ref/example/shared" />
+            <option value="$PROJECT_DIR$/miuix-mingw-ref/miuix-blur" />
+            <option value="$PROJECT_DIR$/miuix-mingw-ref/miuix-core" />
+            <option value="$PROJECT_DIR$/miuix-mingw-ref/miuix-icons" />
+            <option value="$PROJECT_DIR$/miuix-mingw-ref/miuix-navigation3-ui" />
+            <option value="$PROJECT_DIR$/miuix-mingw-ref/miuix-preference" />
+            <option value="$PROJECT_DIR$/miuix-mingw-ref/miuix-shapes" />
+            <option value="$PROJECT_DIR$/miuix-mingw-ref/miuix-ui" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+    </option>
+  </component>
+</project>

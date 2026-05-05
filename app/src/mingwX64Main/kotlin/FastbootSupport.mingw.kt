@@ -22,8 +22,8 @@ data class FastbootScanResult(
 fun scanFastbootDevices(): FastbootScanResult {
     val localBinary = resolveRuntimePath(".\\META-INF\\fastboot.exe")
     val runtimeDir = resolveRuntimePath(".")
-    val fastbootCommand = if (pathExists(localBinary)) ".\\META-INF\\fastboot.exe" else "fastboot"
-    val commandText = "$fastbootCommand devices"
+    val hasLocalBinary = pathExists(localBinary)
+    val commandText = if (hasLocalBinary) ".\\META-INF\\fastboot.exe devices" else "fastboot devices"
     val outputLines = runStreamingShellCommand(
         command = commandText,
         workingDirectory = runtimeDir,

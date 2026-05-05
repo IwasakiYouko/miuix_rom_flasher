@@ -22,6 +22,7 @@ import platform.posix.remove
 import platform.posix.rewind
 import platform.windows.CREATE_NO_WINDOW
 import platform.windows.CloseHandle
+import platform.windows.CreateDirectoryW
 import platform.windows.CreateProcessW
 import platform.windows.FALSE
 import platform.windows.STARTF_USESHOWWINDOW
@@ -45,6 +46,7 @@ fun runStreamingShellCommand(
     onLine: ((String) -> Unit)? = null,
 ): StreamCommandResult {
     val outputPath = resolveTempPath(".\\__winflasher_stream_${Random.nextInt(100000, 999999)}.log")
+    ensureOutputDirectory(outputPath)
     val started = startHiddenCommand(
         command = command,
         outputPath = outputPath,
@@ -139,6 +141,16 @@ private fun buildHiddenCommandLine(command: String, outputPath: String): String 
         .removeSuffix("2>&1")
         .trim()
     return "cmd.exe /d /c chcp 65001>nul & $sanitizedCommand > \"${normalizedOutputPath}\" 2>&1 & echo $EXIT_MARKER_PREFIX%ERRORLEVEL%>>\"${normalizedOutputPath}\""
+}
+
+@OptIn(ExperimentalForeignApi::class)
+private fun ensureOutputDirectory(outputPath: String) {
+    val directory = outputPath
+        .replace('/', '\\')
+        .substringBeforeLast('\\', missingDelimiterValue = "")
+    if (directory.isNotBlank()) {
+        CreateDirectoryW(directory, null)
+    }
 }
 
 private fun splitExitCode(lines: List<String>): Pair<Int, List<String>> {
