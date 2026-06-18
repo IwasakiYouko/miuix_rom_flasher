@@ -69,7 +69,6 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
-import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.usePinned
@@ -245,12 +244,15 @@ private fun fallbackRomPackageInfo(): RomPackageInfo = RomPackageInfo(
     hasBootPatch = false,
 )
 
-fun main() = application {
-    Window(
-        title = "WinFlasher",
-        size = DpSize(1280.dp, 820.dp),
-    ) {
-        SampleApp()
+fun main() {
+    installGlobalErrorReporting()
+    application {
+        Window(
+            title = "WinFlasher",
+            size = DpSize(1280.dp, 820.dp),
+        ) {
+            SampleApp()
+        }
     }
 }
 
@@ -331,10 +333,25 @@ private fun SampleApp() {
     var isUpdatingPlatformTools by remember { mutableStateOf(false) }
     var platformToolsProgress by remember { mutableStateOf<Float?>(null) }
     var platformToolsProgressText by remember { mutableStateOf("未安装") }
-    val romPackageInfo = remember { runCatching(::loadRomPackageInfo).getOrElse { fallbackRomPackageInfo() } }
-    val firmwareImageInfo = remember { runCatching(::loadFirmwareImageInfo).getOrElse { FirmwareImageInfo(emptyList()) } }
+    val romPackageInfo = remember {
+        runCatching(::loadRomPackageInfo).getOrElse {
+            recordError("startup", "加载 ROM 包信息失败，使用默认值", it)
+            fallbackRomPackageInfo()
+        }
+    }
+    val firmwareImageInfo = remember {
+        runCatching(::loadFirmwareImageInfo).getOrElse {
+            recordError("startup", "加载固件镜像信息失败，使用空列表", it)
+            FirmwareImageInfo(emptyList())
+        }
+    }
     var platformToolsState by remember {
-        mutableStateOf(runCatching(::readPlatformToolsState).getOrElse { PlatformToolsState(installed = false, statusText = "未安装") })
+        mutableStateOf(
+            runCatching(::readPlatformToolsState).getOrElse {
+                recordError("startup", "读取 platform-tools 状态失败", it)
+                PlatformToolsState(installed = false, statusText = "未安装")
+            },
+        )
     }
     var resolvedDeviceDisplayName by remember(romPackageInfo.deviceName) {
         mutableStateOf(romPackageInfo.deviceName)

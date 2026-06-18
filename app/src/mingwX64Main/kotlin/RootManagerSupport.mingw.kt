@@ -36,6 +36,7 @@ fun rootManagerOptionsFor(rootMode: RootMode): List<RootManagerOption> =
             RootMode.KeepOriginal -> emptyList()
         }
     }.getOrElse {
+        recordError("startup", "扫描 ROOT 管理器选项失败（$rootMode），使用默认项", it)
         when (rootMode) {
             RootMode.MagiskPatch -> listOf(RootManagerOption("auto", "自动检测"))
             RootMode.FolkPatch -> listOf(RootManagerOption("0.13.0", "0.13.0"))

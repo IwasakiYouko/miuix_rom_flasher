@@ -1,8 +1,4 @@
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.addressOf
-import kotlinx.cinterop.convert
-import kotlinx.cinterop.toKString
-import kotlinx.cinterop.usePinned
 import kotlin.random.Random
 import platform.posix.SEEK_END
 import platform.posix.fclose
