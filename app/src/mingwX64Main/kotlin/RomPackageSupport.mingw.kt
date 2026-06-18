@@ -158,7 +158,7 @@ private fun readLines(path: String): List<String> {
     val text = if (containsOnlyAscii(bytes)) {
         asciiBytesToString(bytes)
     } else {
-        readTextWithPowerShell(path).ifBlank { utf8BytesToString(bytes) }
+        readTextWithPowerShell(path).ifBlank { bytes.decodeUtf8Safe() }
     }
 
     return text
@@ -174,11 +174,6 @@ private fun asciiBytesToString(bytes: ByteArray): String =
     buildString(bytes.size) {
         bytes.forEach { append((it.toInt() and 0xFF).toChar()) }
     }
-
-private fun utf8BytesToString(bytes: ByteArray): String {
-    if (bytes.isEmpty()) return ""
-    return bytes.decodeToString()
-}
 
 @OptIn(ExperimentalForeignApi::class)
 private fun readBytes(path: String): ByteArray {
@@ -203,7 +198,7 @@ private fun readTextWithPowerShell(path: String): String {
     val exitCode = runPowerShellScript(script)
     if (exitCode != 0) return ""
 
-    val text = utf8BytesToString(readBytes(outputFile))
+    val text = readBytes(outputFile).decodeUtf8Safe()
     remove(outputFile)
     return text
 }

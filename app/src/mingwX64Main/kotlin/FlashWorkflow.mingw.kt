@@ -1,8 +1,4 @@
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.addressOf
-import kotlinx.cinterop.convert
-import kotlinx.cinterop.toKString
-import kotlinx.cinterop.usePinned
 import kotlin.math.max
 import kotlin.random.Random
 import platform.posix.SEEK_END
@@ -2022,7 +2018,7 @@ private fun readTextLines(path: String): List<String> {
     if (!fileExists(path)) return emptyList()
     val bytes = readAllBytes(path)
     if (bytes.isEmpty()) return emptyList()
-    val text = bytes.decodeAsUtf8()
+    val text = bytes.decodeUtf8Safe()
         .removePrefix("\uFEFF")
         .replace("\r\n", "\n")
         .replace('\r', '\n')
@@ -2032,11 +2028,6 @@ private fun readTextLines(path: String): List<String> {
 @OptIn(ExperimentalForeignApi::class)
 private fun readAllBytes(path: String): ByteArray {
     return readAllBytesUnicodeSafe(normalizePath(path))
-}
-
-private fun ByteArray.decodeAsUtf8(): String {
-    if (isEmpty()) return ""
-    return decodeToString()
 }
 
 private fun escapeForPowerShell(value: String): String =

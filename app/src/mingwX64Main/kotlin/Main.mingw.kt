@@ -333,18 +333,13 @@ private fun SampleApp() {
     var isUpdatingPlatformTools by remember { mutableStateOf(false) }
     var platformToolsProgress by remember { mutableStateOf<Float?>(null) }
     var platformToolsProgressText by remember { mutableStateOf("未安装") }
-    val romPackageInfo = remember {
-        runCatching(::loadRomPackageInfo).getOrElse {
-            recordError("startup", "加载 ROM 包信息失败，使用默认值", it)
-            fallbackRomPackageInfo()
-        }
-    }
-    val firmwareImageInfo = remember {
-        runCatching(::loadFirmwareImageInfo).getOrElse {
-            recordError("startup", "加载固件镜像信息失败，使用空列表", it)
-            FirmwareImageInfo(emptyList())
-        }
-    }
+    // Loaded asynchronously below so the window paints immediately instead of blocking the
+    // first frame on file reads / a PowerShell spawn (loadFirmwareImageInfo). Defaults are
+    // cheap placeholders that the LaunchedEffect replaces once loading finishes.
+    var romPackageInfo by remember { mutableStateOf(fallbackRomPackageInfo()) }
+    var firmwareImageInfo by remember { mutableStateOf(FirmwareImageInfo(emptyList())) }
+    // Kept synchronous: it is a cheap existence check, and the auto-update effect below reads
+    // .installed on first composition, so it must reflect the real state immediately.
     var platformToolsState by remember {
         mutableStateOf(
             runCatching(::readPlatformToolsState).getOrElse {
@@ -706,9 +701,29 @@ private fun SampleApp() {
         }
     }
 
+    LaunchedEffect(Unit) {
+        val loaded = withContext(Dispatchers.Default) {
+            val rom = runCatching(::loadRomPackageInfo).getOrElse {
+                recordError("startup", "加载 ROM 包信息失败，使用默认值", it)
+                fallbackRomPackageInfo()
+            }
+            val firmware = runCatching(::loadFirmwareImageInfo).getOrElse {
+                recordError("startup", "加载固件镜像信息失败，使用空列表", it)
+                FirmwareImageInfo(emptyList())
+            }
+            rom to firmware
+        }
+        romPackageInfo = loaded.first
+        firmwareImageInfo = loaded.second
+    }
+
     LaunchedEffect(romPackageInfo.deviceName) {
+        val deviceName = romPackageInfo.deviceName
+        // Skip the placeholder shown before async loading finishes; resolution would just
+        // echo it back anyway, so this only avoids a wasted remote lookup.
+        if (deviceName.isBlank() || deviceName == "unknown") return@LaunchedEffect
         resolvedDeviceDisplayName = withContext(Dispatchers.Default) {
-            resolveRemoteDeviceDisplayName(romPackageInfo.deviceName)
+            resolveRemoteDeviceDisplayName(deviceName)
         }
     }
 

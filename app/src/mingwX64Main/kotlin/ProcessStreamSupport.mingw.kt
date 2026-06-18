@@ -192,20 +192,13 @@ private fun readAllBytes(path: String): ByteArray {
     }
 }
 
-private fun ByteArray.decodeAsUtf8(): String {
-    if (isEmpty()) return ""
-    // decodeToString() handles malformed UTF-8 with the replacement char instead of
-    // crashing, and avoids pinning a native buffer / relying on a NUL terminator.
-    return decodeToString()
-}
-
 private fun ByteArray.decodeCommandText(): String {
     if (size >= 3 &&
         this[0] == 0xEF.toByte() &&
         this[1] == 0xBB.toByte() &&
         this[2] == 0xBF.toByte()
     ) {
-        return copyOfRange(3, size).decodeAsUtf8()
+        return copyOfRange(3, size).decodeUtf8Safe()
     }
-    return decodeAsUtf8()
+    return decodeUtf8Safe()
 }

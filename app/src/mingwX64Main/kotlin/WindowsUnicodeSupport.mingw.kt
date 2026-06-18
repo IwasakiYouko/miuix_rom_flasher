@@ -30,7 +30,7 @@ fun detectExecutableDirectoryViaPowerShell(): String {
         [System.IO.File]::WriteAllText('${escapeUnicodeIoForPowerShell(outputPath)}', ${'$'}path, [System.Text.UTF8Encoding]::new(${'$'}false))
     """.trimIndent()
     if (runUnicodeIoPowerShell(script) != 0) return "."
-    val path = readAsciiFileBytes(outputPath).decodeUnicodeIoUtf8().trim()
+    val path = readAsciiFileBytes(outputPath).decodeUtf8Safe().trim()
     removeAsciiFile(outputPath)
     if (path.isBlank()) return "."
     return path.replace('/', '\\').substringBeforeLast('\\', ".")
@@ -106,7 +106,7 @@ fun writeUtf8BomFileUnicodeSafe(path: String, content: String): Boolean {
 fun readUtf8LinesUnicodeSafe(path: String): List<String> {
     val bytes = readAllBytesUnicodeSafe(path)
     if (bytes.isEmpty()) return emptyList()
-    val text = bytes.decodeUnicodeIoUtf8()
+    val text = bytes.decodeUtf8Safe()
         .removePrefix("\uFEFF")
         .replace("\r\n", "\n")
         .replace('\r', '\n')
@@ -184,7 +184,11 @@ private fun readAsciiFileBytes(path: String): ByteArray {
     }
 }
 
-private fun ByteArray.decodeUnicodeIoUtf8(): String {
+/**
+ * Shared UTF-8 decoder used across the project. Tolerant of malformed bytes (emits the
+ * replacement char rather than throwing) and of empty input, with no native pinning.
+ */
+fun ByteArray.decodeUtf8Safe(): String {
     if (isEmpty()) return ""
     return decodeToString()
 }
