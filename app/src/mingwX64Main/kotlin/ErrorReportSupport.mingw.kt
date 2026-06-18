@@ -4,6 +4,7 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.usePinned
+import kotlin.experimental.ExperimentalNativeApi
 import kotlin.native.setUnhandledExceptionHook
 import platform.posix.fclose
 import platform.posix.fopen
@@ -28,6 +29,7 @@ private val errorLogPaths: List<String> by lazy {
  * that surfaces as "缓冲区溢出" (STATUS_STACK_BUFFER_OVERRUN) on Win10 or a window that never
  * appears on Win11; capturing it here leaves a diagnosable trail instead of a silent crash.
  */
+@OptIn(ExperimentalNativeApi::class)
 fun installGlobalErrorReporting() {
     runCatching {
         setUnhandledExceptionHook { throwable ->
