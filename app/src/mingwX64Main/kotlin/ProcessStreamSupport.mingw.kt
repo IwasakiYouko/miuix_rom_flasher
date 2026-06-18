@@ -195,13 +195,11 @@ private fun readAllBytes(path: String): ByteArray {
     }
 }
 
-@OptIn(ExperimentalForeignApi::class)
 private fun ByteArray.decodeAsUtf8(): String {
-    val terminated = ByteArray(size + 1)
-    copyInto(terminated)
-    return terminated.usePinned { pinned ->
-        pinned.addressOf(0).reinterpret<ByteVar>().toKString()
-    }
+    if (isEmpty()) return ""
+    // decodeToString() handles malformed UTF-8 with the replacement char instead of
+    // crashing, and avoids pinning a native buffer / relying on a NUL terminator.
+    return decodeToString()
 }
 
 private fun ByteArray.decodeCommandText(): String {

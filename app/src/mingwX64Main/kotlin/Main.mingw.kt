@@ -232,6 +232,19 @@ private fun buildPreviewPartitionProgress(
     )
 }
 
+private fun fallbackRomPackageInfo(): RomPackageInfo = RomPackageInfo(
+    logoText = "HanfyHyperOS",
+    deviceName = "unknown",
+    deviceCpu = "unknown",
+    author = "unknown",
+    structure = "unknown",
+    sdkRevision = "unknown",
+    verifiedUser = false,
+    hasFastboot = false,
+    hasUpdaterScript = false,
+    hasBootPatch = false,
+)
+
 fun main() = application {
     Window(
         title = "WinFlasher",
@@ -318,9 +331,11 @@ private fun SampleApp() {
     var isUpdatingPlatformTools by remember { mutableStateOf(false) }
     var platformToolsProgress by remember { mutableStateOf<Float?>(null) }
     var platformToolsProgressText by remember { mutableStateOf("未安装") }
-    val romPackageInfo = remember { loadRomPackageInfo() }
-    val firmwareImageInfo = remember { loadFirmwareImageInfo() }
-    var platformToolsState by remember { mutableStateOf(readPlatformToolsState()) }
+    val romPackageInfo = remember { runCatching(::loadRomPackageInfo).getOrElse { fallbackRomPackageInfo() } }
+    val firmwareImageInfo = remember { runCatching(::loadFirmwareImageInfo).getOrElse { FirmwareImageInfo(emptyList()) } }
+    var platformToolsState by remember {
+        mutableStateOf(runCatching(::readPlatformToolsState).getOrElse { PlatformToolsState(installed = false, statusText = "未安装") })
+    }
     var resolvedDeviceDisplayName by remember(romPackageInfo.deviceName) {
         mutableStateOf(romPackageInfo.deviceName)
     }

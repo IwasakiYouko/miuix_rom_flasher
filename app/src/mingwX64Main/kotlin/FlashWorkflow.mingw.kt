@@ -2034,11 +2034,9 @@ private fun readAllBytes(path: String): ByteArray {
     return readAllBytesUnicodeSafe(normalizePath(path))
 }
 
-@OptIn(ExperimentalForeignApi::class)
 private fun ByteArray.decodeAsUtf8(): String {
-    val terminated = ByteArray(size + 1)
-    copyInto(terminated)
-    return terminated.usePinned { pinned -> pinned.addressOf(0).toKString() }
+    if (isEmpty()) return ""
+    return decodeToString()
 }
 
 private fun escapeForPowerShell(value: String): String =

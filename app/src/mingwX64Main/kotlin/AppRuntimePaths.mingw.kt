@@ -91,7 +91,11 @@ private fun detectAppRuntimeBaseDir(): String = memScoped {
     val bufferSize = 32768
     val buffer = allocArray<UShortVar>(bufferSize)
     val length = GetModuleFileNameW(null, buffer, bufferSize.toUInt())
-    if (length == 0u) return@memScoped "."
+    // length == 0 means failure; length >= bufferSize means the path was truncated and
+    // (on older Windows) may not be NUL-terminated, so fall back instead of over-reading.
+    if (length == 0u || length >= bufferSize.toUInt()) return@memScoped "."
+    // Guarantee a NUL terminator before toKStringFromUtf16() walks the buffer.
+    buffer[length.toInt()] = 0u.toUShort()
     val executablePath = buffer.toKStringFromUtf16().replace('/', '\\')
     executablePath.substringBeforeLast('\\', ".")
 }

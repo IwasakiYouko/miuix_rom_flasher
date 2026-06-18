@@ -179,13 +179,9 @@ private fun asciiBytesToString(bytes: ByteArray): String =
         bytes.forEach { append((it.toInt() and 0xFF).toChar()) }
     }
 
-@OptIn(ExperimentalForeignApi::class)
 private fun utf8BytesToString(bytes: ByteArray): String {
-    val terminated = ByteArray(bytes.size + 1)
-    bytes.copyInto(terminated)
-    return terminated.usePinned { pinned ->
-        pinned.addressOf(0).toKString()
-    }
+    if (bytes.isEmpty()) return ""
+    return bytes.decodeToString()
 }
 
 @OptIn(ExperimentalForeignApi::class)

@@ -184,11 +184,9 @@ private fun readAsciiFileBytes(path: String): ByteArray {
     }
 }
 
-@OptIn(ExperimentalForeignApi::class)
 private fun ByteArray.decodeUnicodeIoUtf8(): String {
-    val terminated = ByteArray(size + 1)
-    copyInto(terminated)
-    return terminated.usePinned { pinned -> pinned.addressOf(0).toKString() }
+    if (isEmpty()) return ""
+    return decodeToString()
 }
 
 private fun removeAsciiFile(path: String) {

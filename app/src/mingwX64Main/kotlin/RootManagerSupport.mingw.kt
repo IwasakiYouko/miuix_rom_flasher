@@ -22,16 +22,26 @@ private const val ManagerProgressPrefix = "__WINFLASHER_MANAGER_PROGRESS__|"
 private const val DefaultKernelSuLkmManagerId = "kernelsu-official"
 
 fun rootManagerOptionsFor(rootMode: RootMode): List<RootManagerOption> =
-    when (rootMode) {
-        RootMode.MagiskPatch -> scanMagiskManagerOptions().ifEmpty {
-            listOf(RootManagerOption("auto", "自动检测"))
+    // Scanning touches the filesystem; never let a failure here crash startup composition.
+    runCatching {
+        when (rootMode) {
+            RootMode.MagiskPatch -> scanMagiskManagerOptions().ifEmpty {
+                listOf(RootManagerOption("auto", "自动检测"))
+            }
+            RootMode.KernelSuLkm -> kernelSuLkmSpecs().map { RootManagerOption(it.id, it.title) }
+            RootMode.FolkPatch -> scanFolkPatchManagerOptions().ifEmpty {
+                listOf(RootManagerOption("0.13.0", "0.13.0"))
+            }
+            RootMode.HfTeamGki -> listOf(RootManagerOption("default", "默认版本"))
+            RootMode.KeepOriginal -> emptyList()
         }
-        RootMode.KernelSuLkm -> kernelSuLkmSpecs().map { RootManagerOption(it.id, it.title) }
-        RootMode.FolkPatch -> scanFolkPatchManagerOptions().ifEmpty {
-            listOf(RootManagerOption("0.13.0", "0.13.0"))
+    }.getOrElse {
+        when (rootMode) {
+            RootMode.MagiskPatch -> listOf(RootManagerOption("auto", "自动检测"))
+            RootMode.FolkPatch -> listOf(RootManagerOption("0.13.0", "0.13.0"))
+            RootMode.HfTeamGki -> listOf(RootManagerOption("default", "默认版本"))
+            else -> emptyList()
         }
-        RootMode.HfTeamGki -> listOf(RootManagerOption("default", "默认版本"))
-        RootMode.KeepOriginal -> emptyList()
     }
 
 fun locateKernelSuLkmManagerApk(
