@@ -1,0 +1,111 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的 Release 标签 (例如 v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # 必须在 Windows 上构建：图标嵌入步骤 (tools/embed-exe-icon.py) 依赖 Win32 API，
+    # 且只有在 Windows 主机上才能产出可直接分发的 exe + 运行时 DLL。
+    runs-on: windows-latest
+    steps:
+      - name: Checkout (含子模块 miuix-mingw-ref)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Python (图标嵌入用)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Setup Gradle (含缓存)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache Kotlin/Native (~/.konan)
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: konan-${{ runner.os }}-
+
+      - name: 构建 Release 可执行文件
+        run: ./gradlew.bat :app:linkReleaseExecutableMingwX64 --no-daemon --stacktrace
+
+      - name: 校验产物存在
+        shell: pwsh
+        run: |
+          $dist = 'app/build/bin/mingwX64/releaseExecutable'
+          if (-not (Test-Path "$dist/MiuixWinSample.exe")) {
+            Write-Error "未找到 MiuixWinSample.exe，构建可能失败"
+            exit 1
+          }
+          Get-ChildItem $dist | Select-Object Name, Length | Format-Table -AutoSize
+
+      - name: 上传构建产物 (供测试下载)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiuixWinSample-${{ github.sha }}
+          path: app/build/bin/mingwX64/releaseExecutable
+          if-no-files-found: error
+
+      # ---------- 以下仅在打 tag 或手动触发时执行：打包并发布 Release ----------
+
+      - name: 解析发布标签
+        id: meta
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $tag = '${{ github.event.inputs.tag }}'
+          } else {
+            $tag = '${{ github.ref_name }}'
+          }
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            Write-Error '未提供发布标签'
+            exit 1
+          }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: 打包发行版 (exe + 运行时依赖)
+        id: pkg
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          $dist = 'app/build/bin/mingwX64/releaseExecutable'
+          $zip = "MiuixWinSample-${{ steps.meta.outputs.tag }}.zip"
+          Compress-Archive -Path "$dist/*" -DestinationPath $zip -Force
+          "artifact=$zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: 发布 GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          files: ${{ steps.pkg.outputs.artifact }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
